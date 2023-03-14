@@ -11,6 +11,7 @@ Etant a la recherche pour un programme utilisant massivement le multihreading le
 * TMonitor.
 * TMREWSync.
 * TLightweightMREW.
+* TSpinLock.
 
 ## Voici le résultat visuel :
 ![Ecran](Threads-Locker.jpg "Ecran de résultats")

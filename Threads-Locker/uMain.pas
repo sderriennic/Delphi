@@ -76,12 +76,20 @@ type
     procedure UnLockWrite; override;
   end;
 
+  TSpinThread = class (TTestThread)
+    procedure LockRead; override;
+    procedure UnLockRead; override;
+    procedure LockWrite; override;
+    procedure UnLockWrite; override;
+  end;
+
 var
   vcs: TRTLCriticalSection;
   MREW: TMREWSync;
   LightMREW: TLightweightMREW;
   vCounter: Cardinal;
-  vDataCS, vDataMon, vDataMREW, vDataLight: TData;
+  SpinLock: TSpinLock;
+  vDataCS, vDataMon, vDataMREW, vDataLight, vDataSpin: TData;
 
 //
 // Execute
@@ -192,21 +200,43 @@ begin
   LightMREW.EndWrite;
 end;
 
+
+procedure TSpinThread.LockRead;
+begin
+  SpinLock.Enter;
+end;
+
+procedure TSpinThread.UnLockRead;
+begin
+  SpinLock.Exit;
+end;
+
+procedure TSpinThread.LockWrite;
+begin
+  SpinLock.Enter;
+end;
+
+procedure TSpinThread.UnLockWrite;
+begin
+  SpinLock.Exit;
+end;
+
 //
 // FormCreate
 //
 procedure TfrmMain.FormCreate(Sender: TObject);
 begin
-  PaintBox1.Hint := 'Left-Click: restart' + #13#10 + #13#10 +
+  PaintBox1.Hint := 'Left-Click: restart' + #13#10 +
                     'Gray: TCriticalSection' + #13#10 +
                     'Red: TMonitor' + #13#10 +
-                    'Green: TMREWSync' + #13#10 +
-                    'Blue: TLightweightMREW';
+                    'Yellow: TMREWSync' + #13#10 +
+                    'Blue: TLightweightMREW' + #13#10 +
+                    'Green: TSpinLock';
 
   PaintBox1.ShowHint := True;
 
   PaintBox1.Width  := (ESPACE * 2) + (LARGEUR * BLOCS);
-  PaintBox1.Height := (ESPACE * 5) + ((HAUTEUR * NBTHREADS) * 4);
+  PaintBox1.Height := (ESPACE * 6) + ((HAUTEUR * NBTHREADS) * 5);
 
   InitialiseProcessus;
 end;
@@ -222,6 +252,8 @@ begin
   InitializeCriticalSection(vcs);
 
   MREW := TMREWSync.Create;
+
+  SpinLock.Create(True);
 
   Caption := 'CPU: ' + IntToStr(NBTHREADS);
 
@@ -329,6 +361,35 @@ begin
 
   Caption := Caption + Format(', TLightweightMREW: %.5f s', [(qe-qs)/qf]);
 
+
+  // SpinLock
+  QueryPerformanceFrequency(qf);
+
+  FillChar(vDataSpin, SizeOf(vDataSpin), 0);
+
+  QueryPerformanceCounter(qs);
+
+  vCounter := 0;
+
+  for i := 0 to High(threads) do
+  begin
+    threads[i]      := TSpinThread.Create;
+    threads[i].N    := i;
+    threads[i].Data := @vDataSpin;
+  end;
+
+  for i := 0 to High(threads) do
+  begin
+    threads[i].WaitFor;
+    threads[i].Free;
+  end;
+
+  QueryPerformanceCounter(qe);
+
+  Caption := Caption + Format(', TSpinLock: %.5f s', [(qe-qs)/qf]);
+
+  // Fin
+
   MREW.Free;
 
   DeleteCriticalSection(vcs);
@@ -366,7 +427,7 @@ begin
       r.Bottom := r.Top + HAUTEUR;
       k        := vDataCS[i, j] * 255 div SAMPLES;
 
-      canvas.Brush.Color := RGB(k, k, k);
+      canvas.Brush.Color := RGB(k, k, k); // Gris
       canvas.FillRect(r);
 
       // Monitor
@@ -374,7 +435,7 @@ begin
       r.Bottom := r.Top + HAUTEUR;
       k        := vDataMon[i, j] * 255 div SAMPLES;
 
-      canvas.Brush.Color := RGB(k, 0, 0);
+      canvas.Brush.Color := RGB(k, 0, 0); // Rouge
       canvas.FillRect(r);
 
       // MREW
@@ -382,7 +443,7 @@ begin
       r.Bottom := r.Top + HAUTEUR;
       k        := vDataMREW[i, j] * 255 div SAMPLES;
 
-      canvas.Brush.Color := RGB(0, k, 0);
+      canvas.Brush.Color := RGB(k, k, 0); // Jaune
       canvas.FillRect(r);
 
       // LightMREW
@@ -390,7 +451,15 @@ begin
       r.Bottom := r.Top + HAUTEUR;
       k        := vDataLight[i, j] * 255 div SAMPLES;
 
-      canvas.Brush.Color := RGB(0, 0, k);
+      canvas.Brush.Color := RGB(0, 0, k); // Bleu
+      canvas.FillRect(r);
+
+      // SpinLock
+      r.Top    := (ESPACE * 5) + ((j + (NBTHREADS * 4)) * HAUTEUR);
+      r.Bottom := r.Top + HAUTEUR;
+      k        := vDataSpin[i, j] * 255 div SAMPLES;
+
+      canvas.Brush.Color := RGB(0, k, 0); // Vert
       canvas.FillRect(r);
     end;
   end;
